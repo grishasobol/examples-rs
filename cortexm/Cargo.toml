@@ -1,0 +1,7 @@
+[package]
+name = "cortexm-example"
+version = "0.1.4"
+
+[dependencies]
+libc = { version = "0.2.101", default-features = false }
+nix = "0.20.0"
