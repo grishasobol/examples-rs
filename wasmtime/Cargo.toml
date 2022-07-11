@@ -1,0 +1,10 @@
+[package]
+name = "wasmtime-example"
+version = "0.1.0"
+
+[[bin]]
+name = "wt"
+
+[dependencies]
+anyhow = "1.0.41"
+wasmtime = { version = "0.27.0" }
