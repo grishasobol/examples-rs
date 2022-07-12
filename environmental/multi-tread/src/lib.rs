@@ -1,37 +1,38 @@
 use std::sync::RwLock;
+// use environmental::environmental;
 
 #[derive(Default)]
-pub struct Lol<T> {
+pub struct Lol<T: ?Sized> {
     inner: Option<RwLock<*mut T>>,
 }
 
-impl<T> Lol<T> {
+impl<T: ?Sized> Lol<T> {
     pub const fn new() -> Self {
         Lol { inner: None }
     }
 
-    pub unsafe fn set(&mut self, data: &mut T) {
+    pub fn set(&mut self, data: &mut T) {
         let x = RwLock::new(data as *mut T);
         self.inner.replace(x);
     }
 
-    pub unsafe fn unset(&mut self) {
+    pub fn unset(&mut self) {
         let _ = self.inner.take();
     }
 
-    pub fn using<R>(mut this: Self, var: &mut T, f: impl FnOnce() -> R) -> R {
+    pub fn using<R>(this: &mut Self, var: &mut T, f: impl FnOnce() -> R) -> R {
         let x = RwLock::new(var as *mut T);
         this.inner.replace(x);
 
-        struct StackGuard<'a, T> {
+        struct StackGuard<'a, T: ?Sized> {
             global_stack: &'a mut Lol<T>,
         }
-        impl<'a, T> Drop for StackGuard<'a, T> {
+        impl<'a, T: ?Sized> Drop for StackGuard<'a, T> {
             fn drop(&mut self) {
-                let _ = self.global_stack.inner.take();
+                self.global_stack.unset();
             }
         }
-        let _guard = StackGuard { global_stack: &mut this };
+        let _guard = StackGuard { global_stack: this };
 
         f()
     }
@@ -53,42 +54,159 @@ impl<T> Lol<T> {
     }
 }
 
-pub fn using<T, R>(global: &mut Lol<T>, var: &mut T, f: impl FnOnce() -> R) -> R {
-	unsafe {
-		global.set(var);
+#[macro_export]
+macro_rules! menv {
+    ($name:ident : $t:ty) => {
+        mod $name {
+            #[allow(unused_imports)]
+            use super::*;
 
-		struct PopGlobal<'a, T> {
-			global_stack: &'a mut Lol<T>,
-		}
+            static mut GLOBAL: $crate::Lol<$t> = $crate::Lol::new();
 
-		impl<'a, T> Drop for PopGlobal<'a, T> {
-			fn drop(&mut self) {
-                unsafe {
-				    self.global_stack.unset();
-                }
+            pub fn using<R, F: FnOnce() -> R>(protected: &mut $t, f: F) -> R {
+                unsafe { $crate::Lol::using(&mut GLOBAL, protected, f) }
+            }
+
+            pub fn with<R, F: FnOnce(&$t) -> R>(f: F) -> R {
+                unsafe { GLOBAL.with(|x| f(x)) }
+            }
+
+            pub fn with_mut<R, F: FnOnce(&mut $t) -> R>(f: F) -> R {
+                unsafe { GLOBAL.with_mut(|x| f(x)) }
+            }
+        }
+    };
+	($name:ident : trait @$t:ident [$($args:ty,)*]) => {
+		mod $name {
+		    #[allow(unused_imports)]
+            use super::*;
+
+			static mut GLOBAL: $crate::Lol<dyn $t<$($args),*>> = $crate::Lol::new();
+
+			pub fn using<R, F: FnOnce() -> R>(
+				protected: &mut dyn $t<$($args),*>,
+				f: F
+			) -> R {
+				let lifetime_extended = unsafe {
+					core::mem::transmute::<&mut dyn $t<$($args),*>, &mut (dyn $t<$($args),*> + 'static)>(protected)
+				};
+                unsafe { $crate::Lol::using(&mut GLOBAL, lifetime_extended, f) }
+			}
+
+			pub fn with<R, F: FnOnce(&dyn $t<$($args),*>) -> R>(
+				f: F
+			) -> R {
+                unsafe { GLOBAL.with(|x| f(x)) }
+			}
+
+			pub fn with_mut<R, F: FnOnce(&mut dyn $t<$($args),*>) -> R>(
+				f: F
+			) -> R {
+                unsafe { GLOBAL.with_mut(|x| f(x)) }
 			}
 		}
-
-		let _guard = PopGlobal { global_stack: global };
-
-        f()
-	}
+	};
+	($name:ident : trait $t:ident <>) => { $crate::menv! { $name : trait @$t [] } };
+	($name:ident : trait $t:ident < $($args:ty),* $(,)* >) => {
+		$crate::menv! { $name : trait @$t [$($args,)*] }
+	};
+	($name:ident : trait $t:ident) => { $crate::menv! { $name : trait @$t [] } };
 }
 
-pub fn with<T, R>(global: &mut Lol<T>, f: impl FnOnce(&T) -> R) -> R {
-    global.with(f)
+pub trait LolKek {
+    fn add(&mut self);
+    fn read(&self) -> u32;
 }
 
-pub fn with_mut<T, R>(global: &mut Lol<T>, f: impl FnOnce(&T) -> R) -> R {
-    global.with(f)
+#[test]
+pub fn test_dyn_trait() {
+    use std::thread;
+    struct A {
+        pub a: u32,
+    }
+
+    impl LolKek for A {
+        fn add(&mut self) {
+            self.a += 1;
+        }
+        fn read(&self) -> u32 {
+            self.a
+        }
+    }
+
+    menv!(kekus: trait LolKek);
+
+    let mut z = A { a: 10 };
+
+    kekus::using(&mut z, || {
+        let j1 = thread::Builder::new()
+            .name("writer".to_string())
+            .spawn(|| {
+                for _ in 0..1000 {
+                    kekus::with_mut(|value| value.add());
+                }
+            })
+            .unwrap();
+        let j2 = thread::Builder::new()
+            .name("reader".to_string())
+            .spawn(|| {
+                for i in 0..100 {
+                    kekus::with(|value| println!("{}) counter = {}", i, value.read()));
+                }
+            })
+            .unwrap();
+        println!("Join thread writer");
+        j1.join().unwrap();
+        println!("Join thread reader");
+        j2.join().unwrap();
+        println!("All done");
+        kekus::with(|val| {
+            println!("val = {}", val.read());
+        })
+    });
+}
+
+#[test]
+fn test1() {
+    use std::thread;
+
+    menv!(kekus: i32);
+
+    let mut z = 42;
+    kekus::using(&mut z, || {
+        let j1 = thread::Builder::new()
+            .name("writer".to_string())
+            .spawn(|| {
+                for _ in 0..1000 {
+                    kekus::with_mut(|value| *value += 1);
+                }
+            })
+            .unwrap();
+        let j2 = thread::Builder::new()
+            .name("reader".to_string())
+            .spawn(|| {
+                for i in 0..100 {
+                    kekus::with(|value| println!("{}) counter = {}", i, value));
+                }
+            })
+            .unwrap();
+        println!("Join thread writer");
+        j1.join().unwrap();
+        println!("Join thread reader");
+        j2.join().unwrap();
+        println!("All done");
+        kekus::with(|val| {
+            println!("val = {}", val);
+        })
+    });
 }
 
 #[cfg(test)]
 mod test {
-	use crate::Lol;
-	use std::thread;
+    use crate::Lol;
+    use std::thread;
 
-	static mut GLOBAL: Lol<i32> = Lol::new();
+    static mut GLOBAL: Lol<i32> = Lol::new();
 
     #[test]
     fn simple() {
@@ -119,6 +237,39 @@ mod test {
             GLOBAL.with(|val| {
                 println!("val = {}", val);
             })
+        }
+    }
+
+    #[test]
+    fn test_using() {
+        let mut z = 42;
+        unsafe {
+            Lol::using(&mut GLOBAL, &mut z, || {
+                let j1 = thread::Builder::new()
+                    .name("writer".to_string())
+                    .spawn(|| {
+                        for _ in 0..1000 {
+                            GLOBAL.with_mut(|value| *value += 1);
+                        }
+                    })
+                    .unwrap();
+                let j2 = thread::Builder::new()
+                    .name("reader".to_string())
+                    .spawn(|| {
+                        for i in 0..100 {
+                            GLOBAL.with(|value| println!("{}) counter = {}", i, value));
+                        }
+                    })
+                    .unwrap();
+                println!("Join thread writer");
+                j1.join().unwrap();
+                println!("Join thread reader");
+                j2.join().unwrap();
+                println!("All done");
+                GLOBAL.with(|val| {
+                    println!("val = {}", val);
+                })
+            });
         }
     }
 }

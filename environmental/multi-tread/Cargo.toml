@@ -3,3 +3,6 @@ edition = "2018"
 name = "mult-env"
 version = "1.0.0"
 
+[dependencies]
+environmental = "1.1.3"
+
