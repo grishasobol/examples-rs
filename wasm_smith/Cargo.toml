@@ -1,0 +1,17 @@
+[package]
+name = "wasm-smith-examples"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+wasm-smith = { path = "../../wasm-tools/crates/wasm-smith" }
+rand = { version = "0.8.0", features = ["small_rng"] }
+wasmparser = { version = "0.90.0" }
+arbitrary = { version = "1.1.0", features = ["derive"] }
+wasm-instrument = { version = "0.2", default-features = false }
+parity-wasm = { version = "0.45.0", default-features = false }
+wat = "1.0.48"
+wasmprinter = "0.2.39"
+gear-program = "0.1"
+hex = "0.4.3"
+tokio = { version = "1.18.2", features = [ "full" ] }

@@ -1,0 +1,7 @@
+[package]
+name = "wasmer-examples"
+version = "0.0.1"
+
+[dependencies]
+# wasmer = { version = "2.3.0", default-features = false, features = ["default-singlepass", "default-universal", "wat", "sys"] }
+wasmer = { version = "2.3.0" }
