@@ -9,9 +9,13 @@ fn test() {
         (import "env" "memory" (memory 1))
         (type $t0 (func (param i32) (result i32)))
         (func $add_one (export "add_one") (type $t0) (param $p0 i32) (result i32)
-            i32.const 0xf0000
-            i32.load
+            i32.const 1
+            i32.popcnt
             drop
+
+            ;; i32.const 0xf0000
+            ;; i32.load
+            ;; drop
 
             get_local $p0
             i32.const 1

@@ -1,0 +1,13 @@
+[package]
+name = "wasmv1"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+
+[dependencies]
+wee_alloc = "0.4"

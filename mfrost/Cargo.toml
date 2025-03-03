@@ -1,0 +1,8 @@
+[package]
+name = "mfrost"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+frost-secp256k1 = "1.0.0"
+rand = "0.8.4"

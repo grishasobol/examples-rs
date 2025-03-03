@@ -1,0 +1,19 @@
+[package]
+name = "kvdb"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+
+[dependencies]
+rocksdb = "0.22.0"
+dashmap = "5.5.3"
+sha2 = "0.10.8"
+tempfile = "3.3.0"
+scopeguard = "1.2.0"
+rand = "0.8.5"
+scale-info = { version = "2.5.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.6.4", default-features = false }
+sparse-merkle-tree = "0.6.1"
