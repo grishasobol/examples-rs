@@ -1,12 +1,9 @@
 use std::{
-    collections::BTreeSet,
-    env,
+    fs::File,
+    io::{BufRead, BufReader},
     ops::Index,
-    os::fd::FromRawFd,
-    process::{Command, Stdio}, fs::File, io::{BufReader, BufRead}, thread::sleep, time::Duration, sync::Arc, convert::{TryFrom, TryInto},
+    process::{Command, Stdio},
 };
-
-mod proc_macro;
 
 #[test]
 fn return_iterator() {
@@ -203,16 +200,14 @@ fn test_command() {
     // sleep(Duration::from_secs(1));
     // let res = reader.into_inner();
 
-
     ps.wait();
 
     // let out = ps.stdout.take().unwrap();
 }
 
-
 #[test]
 fn macro_test() {
-    let mut  s = String::new();
+    let mut s = String::new();
     s = s + "das";
     // stringify!()
     // format!()
@@ -241,60 +236,81 @@ fn macro_test() {
     syscall_trace!("send", s, s);
 }
 
-
-const TR: usize = 10;
-
 pub fn split_compute<T, R, F>(data: Vec<T>, task: F) -> Vec<R>
 where
     T: Clone + Send + 'static,
     R: Send + 'static,
     F: FnOnce(T) -> R + Copy + Send + 'static,
 {
+    const TR: usize = 10;
+
     data.chunks(data.len() / TR)
         .map(|chunk| chunk.to_vec())
-        .map(|chunk| std::thread::spawn(move || chunk.into_iter().map(|t| task(t)).collect::<Vec<_>>()))
+        .map(|chunk| {
+            std::thread::spawn(move || chunk.into_iter().map(|t| task(t)).collect::<Vec<_>>())
+        })
         .map(|t| t.join().expect("Error in thread occurs"))
         .flat_map(|v| v.into_iter())
         .collect::<Vec<_>>()
 }
 
 #[test]
-fn two_traits() {
-    trait Bound<T: Bounded<B = Self>> : From<Self> + Copy {
-        const UPPER: Self;
-        fn unbound(&self) -> Option<T>;
+fn test_derive_more() {
+    #[derive(derive_more::Display, derive_more::Debug)]
+    #[display("{a} {b}")]
+    struct A {
+        a: i32,
+        b: i64,
     }
 
-    trait Bounded: Sized {
-        type B = Bounded<Self>;
+    #[derive(derive_more::Display, derive_more::Debug)]
+    struct B {
+        b: i64,
     }
 
-    #[derive(Clone, Copy)]
-    struct Lol(u32);
+    println!("{:?}", A { a: 10, b: -20 });
+    println!("{}", A { a: -10, b: 20 });
 
-    impl<T: Bounded<Self>> Bound<T> for Lol {
-        const UPPER: Self = Lol(123);
-        fn unbound(&self) -> Option<T> {
-            if self.0 > Lol::UPPER.0 {
-                None
-            } else {
-                unsafe { Some(T::from_bound(self)) }
-            }
-        }
-    }
-
-    struct Kek(u32);
-
-    impl From<Kek> for Lol {
-        fn from(value: Kek) -> Self {
-            Lol(value.0)
-        }
-    }
-
-    impl Bounded<Lol> for Kek {
-        unsafe fn from_bound(bound: &) -> Self {
-            Kek(bound.0)
-        }
-    }
+    println!("{:?}", B { b: 20 });
+    println!("{}", B { b: -20 });
 }
 
+// #[test]
+// fn two_traits() {
+//     trait Bound<T: Bounded<B = Self>> : From<Self> + Copy {
+//         const UPPER: Self;
+//         fn unbound(&self) -> Option<T>;
+//     }
+
+//     trait Bounded: Sized {
+//         type B = Bounded<Self>;
+//     }
+
+//     #[derive(Clone, Copy)]
+//     struct Lol(u32);
+
+//     impl<T: Bounded<Self>> Bound<T> for Lol {
+//         const UPPER: Self = Lol(123);
+//         fn unbound(&self) -> Option<T> {
+//             if self.0 > Lol::UPPER.0 {
+//                 None
+//             } else {
+//                 unsafe { Some(T::from_bound(self)) }
+//             }
+//         }
+//     }
+
+//     struct Kek(u32);
+
+//     impl From<Kek> for Lol {
+//         fn from(value: Kek) -> Self {
+//             Lol(value.0)
+//         }
+//     }
+
+//     impl Bounded<Lol> for Kek {
+//         unsafe fn from_bound(bound: &) -> Self {
+//             Kek(bound.0)
+//         }
+//     }
+// }
